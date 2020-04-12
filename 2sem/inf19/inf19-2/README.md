@@ -10,7 +10,7 @@
 
 Интерфейс который необходимо реализовать:
 
-'''c++
+'''
 #include <string>
 
 class AbstractClass

@@ -12,6 +12,17 @@ typedef struct {
     int done;
 } data_t;
 
+size_t count_and_close(int epoll_fd, data_t** entries, int N) {
+    close(epoll_fd);
+    size_t summary_bytes = 0;
+    for (size_t i = 0; i < N; ++i) {
+        summary_bytes += entries[i]->count;
+        close(entries[i]->fd);
+        free(entries[i]);
+    }
+    return summary_bytes;
+}
+
 void
 process_event(struct epoll_event *event)
 {
@@ -26,6 +37,9 @@ process_event(struct epoll_event *event)
             data_ptr->done = 1;
             close(data_ptr->fd);
         }
+    } else if (event->events & EPOLLHUP) {
+        data_ptr->done = -1;
+        close(data_ptr->fd);
     }
 }
 
@@ -64,17 +78,12 @@ read_data_and_count(size_t N, int in[N]) {
         int events = epoll_wait(epoll_fd, pending, 65536, -1);
         for (int i = 0; i < events; ++i) {
             process_event(&(pending[i]));
-            if (((data_t*)(pending[i].data.ptr))->done) {
+            if (((data_t*)(pending[i].data.ptr))->done == 1) {
                 files_left--;
+            } else if (((data_t*)(pending[i].data.ptr))->done == -1) {
+                return count_and_close(epoll_fd, entries, N);
             }
         }
     }
-    close(epoll_fd);
-    size_t summary_bytes = 0;
-    for (size_t i = 0; i < N; ++i) {
-        summary_bytes += entries[i]->count;
-        free(entries[i]);
-    }
-    return summary_bytes;
+    return count_and_close(epoll_fd, entries, N);
 }
-
